@@ -17,9 +17,9 @@ class MagnificationResource extends Resource
 {
     protected static ?string $model = Magnification::class;
 
-    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-magnifying-glass';
+    protected static ?string $navigationIcon = 'heroicon-o-magnifying-glass';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Catalog';
+    protected static ?string $navigationGroup = 'Catalog';
 
     public static function form(Schema $schema): Schema
     {

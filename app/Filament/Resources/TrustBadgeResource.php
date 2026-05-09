@@ -15,9 +15,9 @@ class TrustBadgeResource extends Resource
 {
     protected static ?string $model = TrustBadge::class;
 
-    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-shield-check';
+    protected static ?string $navigationIcon = 'heroicon-o-shield-check';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Catalog';
+    protected static ?string $navigationGroup = 'Catalog';
 
     public static function form(Schema $schema): Schema
     {

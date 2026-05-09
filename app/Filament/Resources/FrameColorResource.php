@@ -17,9 +17,9 @@ class FrameColorResource extends Resource
 {
     protected static ?string $model = FrameColor::class;
 
-    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-swatch';
+    protected static ?string $navigationIcon = 'heroicon-o-swatch';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Catalog';
+    protected static ?string $navigationGroup = 'Catalog';
 
     public static function form(Schema $schema): Schema
     {
