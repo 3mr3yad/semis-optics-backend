@@ -1,0 +1,175 @@
+name: CI & Deploy (Laravel)
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: laravel-prod
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Run PHP Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, bcmath, pcntl, intl, sqlite, pdo_sqlite, curl
+          coverage: none
+
+      - name: Cache composer deps
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ runner.os }}-${{ hashFiles('**/composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare app key (testing)
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Run tests
+        run: php artisan test --without-tty
+
+  deploy:
+    name: Deploy to Server
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure SSH secrets exist (hard check)
+        run: |
+          echo "SSH_KEY length:     $(echo "${{ secrets.SSH_KEY }}" | wc -c)"
+          echo "SSH_HOST present?   $([ -n "${{ secrets.SSH_HOST }}" ] && echo yes || echo no)"
+          echo "SSH_USER present?   $([ -n "${{ secrets.SSH_USER }}" ] && echo yes || echo no)"
+          echo "SSH_PORT present?   $([ -n "${{ secrets.SSH_PORT }}" ] && echo yes || echo no)"
+          echo "DEPLOY_PATH present?$([ -n "${{ secrets.DEPLOY_PATH }}" ] && echo yes || echo no)"
+          echo "ENV_PROD present?   $([ -n "${{ secrets.ENV_PROD }}" ] && echo yes || echo no)"
+
+      - name: Add SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+
+      - name: Add host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      # مزامنة الكود (من غير vendor/storage/.env…)
+      - name: Rsync to server
+        run: |
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'vendor' \
+            --exclude 'node_modules' \
+            --exclude 'storage' \
+            --exclude 'public/storage' \
+            --exclude '.env' \
+            -e "ssh -p ${{ secrets.SSH_PORT }}" \
+            ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}
+
+      # كتابة .env من سيكريت (multiline)
+      - name: Write .env on server (from secret)
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            set -e
+            cd "${{ secrets.DEPLOY_PATH }}"
+            if [ ! -f .env ]; then
+              echo "Creating .env from secrets"
+            else
+              echo "Updating existing .env from secrets"
+            fi
+            cat > .env <<'EOF_ENV'
+            ${{ secrets.ENV_PROD }}
+            EOF_ENV
+
+      - name: Run deploy commands on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.DEPLOY_PATH }}"
+
+            echo "==> Prepare Laravel writable directories BEFORE composer scripts"
+            mkdir -p \
+              storage/framework/cache/data \
+              storage/framework/sessions \
+              storage/framework/views \
+              storage/logs \
+              bootstrap/cache
+
+            # symlink public/storage (اختياري)
+            php -r "file_exists('public/storage') || symlink('../storage/app/public','public/storage');" || true
+
+            # صلاحيات
+            sudo chown -R www-data:www-data storage bootstrap/cache || true
+            sudo find storage -type d -exec chmod 775 {} \; || true
+            sudo find storage -type f -exec chmod 664 {} \; || true
+            sudo chmod -R 775 bootstrap/cache || true
+
+            # صيانة
+            if [ -f artisan ]; then
+              php artisan down --refresh=60 --render="errors::503" || true
+            fi
+
+            echo "==> Install composer deps (NO scripts first)"
+            composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress --no-scripts
+
+            echo "==> Run package discovery after dirs are ready"
+            php artisan package:discover --ansi
+
+            echo "==> Clear & optimize"
+            php artisan optimize:clear || true
+
+            echo "==> Migrate"
+            php artisan migrate --force
+
+            # (اختياري) Filament Shield
+            if [ "${{ secrets.RUN_SHIELD || '0' }}" = "1" ]; then
+              php artisan shield:generate --all || true
+              if [ -n "${{ secrets.SUPER_ADMIN_ID }}" ]; then
+                php artisan shield:super-admin --user="${{ secrets.SUPER_ADMIN_ID }}" || true
+              fi
+            fi
+
+            echo "==> Cache for production"
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            php artisan optimize
+
+            echo "==> Restart queue"
+            php artisan queue:restart || true
+
+            echo "==> Up"
+            php artisan up || true
+
+            echo "==> Reload PHP-FPM"
+            (sudo systemctl reload php8.3-fpm || sudo systemctl reload php8.2-fpm || sudo systemctl reload php8.1-fpm || true)
+
+      - name: Health check
+        run: |
+          curl -fsS --max-time 10 "https://${{ secrets.HEALTHCHECK_HOST }}/api/health" || \
+          curl -I "https://${{ secrets.HEALTHCHECK_HOST }}" || true
