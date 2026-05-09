@@ -5,8 +5,6 @@ namespace App\Filament\Resources;
 use App\Filament\Resources\ProductResource\Pages;
 use App\Models\Product;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Repeater;
-use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
@@ -59,86 +57,20 @@ class ProductResource extends Resource
                             ->image()
                             ->imageEditor()
                             ->maxSize(4096),
-                        Repeater::make('gallery')
-                            ->schema([
-                                TextInput::make('type')
-                                    ->required()
-                                    ->maxLength(20)
-                                    ->placeholder('image or video'),
-                                FileUpload::make('url')
-                                    ->label('File')
-                                    ->disk('r2')
-                                    ->directory('products/gallery')
-                                    ->visibility('public')
-                                    ->acceptedFileTypes(['image/*', 'video/mp4'])
-                                    ->maxSize(20480),
-                                FileUpload::make('thumbnail')
-                                    ->label('Video Thumbnail')
-                                    ->disk('r2')
-                                    ->directory('products/gallery/thumbnails')
-                                    ->visibility('public')
-                                    ->image()
-                                    ->maxSize(4096),
-                            ])
-                            ->default([])
-                            ->collapsible(),
-                    ]),
-
-                Section::make('Variants')
-                    ->schema([
-                        Repeater::make('magnification')
-                            ->schema([
-                                TextInput::make('id')->required()->maxLength(50),
-                                TextInput::make('label')->required()->maxLength(100),
-                                Toggle::make('available')->default(true),
-                            ])
-                            ->default([])
-                            ->columns(3)
-                            ->collapsible(),
-                        Repeater::make('frame_colors')
-                            ->schema([
-                                TextInput::make('id')->required()->maxLength(50),
-                                TextInput::make('name')->required()->maxLength(100),
-                                TextInput::make('hex')->maxLength(10),
-                                Toggle::make('available')->default(true),
-                            ])
-                            ->default([])
-                            ->columns(4)
-                            ->collapsible(),
-                    ]),
-
-                Section::make('Features')
-                    ->schema([
-                        Repeater::make('features')
-                            ->schema([
-                                TextInput::make('icon')->maxLength(100),
-                                TextInput::make('title')->required()->maxLength(100),
-                                TextInput::make('description')->required()->maxLength(2000),
-                            ])
-                            ->default([])
-                            ->columns(3)
-                            ->collapsible(),
-                    ]),
-
-                Section::make('Technical Specifications')
-                    ->schema([
-                        Repeater::make('technical_specifications')
-                            ->schema([
-                                TextInput::make('parameter')->required()->maxLength(150),
-                                TextInput::make('specification')->required()->maxLength(500),
-                            ])
-                            ->default([])
-                            ->columns(2)
-                            ->collapsible(),
-                    ]),
-
-                Section::make('Trust Badges')
-                    ->schema([
-                        TagsInput::make('trust_badges')
-                            ->label('Badges')
-                            ->default([]),
                     ]),
             ]);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            ProductResource\RelationManagers\ProductMediaRelationManager::class,
+            ProductResource\RelationManagers\ProductMagnificationsRelationManager::class,
+            ProductResource\RelationManagers\ProductFrameColorsRelationManager::class,
+            ProductResource\RelationManagers\ProductFeaturesRelationManager::class,
+            ProductResource\RelationManagers\ProductTechnicalSpecificationsRelationManager::class,
+            ProductResource\RelationManagers\ProductTrustBadgesRelationManager::class,
+        ];
     }
 
     public static function table(Table $table): Table

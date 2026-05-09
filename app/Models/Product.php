@@ -15,12 +15,6 @@ class Product extends Model
         'rating_score',
         'total_reviews',
         'main_image',
-        'gallery',
-        'magnification',
-        'frame_colors',
-        'features',
-        'technical_specifications',
-        'trust_badges',
         'is_active',
     ];
 
@@ -29,13 +23,42 @@ class Product extends Model
         return [
             'price' => 'decimal:2',
             'rating_score' => 'decimal:1',
-            'gallery' => 'array',
-            'magnification' => 'array',
-            'frame_colors' => 'array',
-            'features' => 'array',
-            'technical_specifications' => 'array',
-            'trust_badges' => 'array',
             'is_active' => 'boolean',
         ];
+    }
+
+    public function media()
+    {
+        return $this->hasMany(ProductMedia::class)->orderBy('sort_order');
+    }
+
+    public function features()
+    {
+        return $this->hasMany(ProductFeature::class)->orderBy('sort_order');
+    }
+
+    public function technicalSpecifications()
+    {
+        return $this->hasMany(ProductTechnicalSpecification::class)->orderBy('sort_order');
+    }
+
+    public function magnifications()
+    {
+        return $this->belongsToMany(Magnification::class, 'product_magnification')
+            ->withPivot(['available'])
+            ->withTimestamps();
+    }
+
+    public function frameColors()
+    {
+        return $this->belongsToMany(FrameColor::class, 'product_frame_color')
+            ->withPivot(['available'])
+            ->withTimestamps();
+    }
+
+    public function trustBadges()
+    {
+        return $this->belongsToMany(TrustBadge::class, 'product_trust_badge')
+            ->withTimestamps();
     }
 }

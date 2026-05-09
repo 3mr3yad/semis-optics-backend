@@ -11,16 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('products', function (Blueprint $table) {
+        Schema::create('frame_colors', function (Blueprint $table) {
             $table->id();
-            $table->string('slug')->unique();
+            $table->string('code')->unique();
             $table->string('name');
-            $table->string('badge')->nullable();
-            $table->decimal('price', 10, 2);
-            $table->string('currency', 3)->default('USD');
-            $table->decimal('rating_score', 3, 1)->default(0.0);
-            $table->unsignedInteger('total_reviews')->default(0);
-            $table->text('main_image')->nullable();
+            $table->string('hex', 10)->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
         });
@@ -31,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('products');
+        Schema::dropIfExists('frame_colors');
     }
 };
