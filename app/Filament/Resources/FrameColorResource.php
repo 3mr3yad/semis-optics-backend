@@ -19,8 +19,6 @@ class FrameColorResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-swatch';
 
-    protected static ?string $navigationGroup = 'Catalog';
-
     public static function form(Form $form): Form
     {
         return $form
