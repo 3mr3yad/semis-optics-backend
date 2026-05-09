@@ -4,6 +4,7 @@ namespace App\Filament\Resources;
 
 use App\Filament\Resources\ProductResource\Pages;
 use App\Models\Product;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\TextInput;
@@ -50,15 +51,34 @@ class ProductResource extends Resource
 
                 Section::make('Media')
                     ->schema([
-                        TextInput::make('main_image')->label('Main Image URL')->url()->maxLength(2048),
+                        FileUpload::make('main_image')
+                            ->label('Main Image')
+                            ->disk('r2')
+                            ->directory('products/main')
+                            ->visibility('public')
+                            ->image()
+                            ->imageEditor()
+                            ->maxSize(4096),
                         Repeater::make('gallery')
                             ->schema([
                                 TextInput::make('type')
                                     ->required()
                                     ->maxLength(20)
                                     ->placeholder('image or video'),
-                                TextInput::make('url')->required()->url()->maxLength(2048),
-                                TextInput::make('thumbnail')->url()->maxLength(2048),
+                                FileUpload::make('url')
+                                    ->label('File')
+                                    ->disk('r2')
+                                    ->directory('products/gallery')
+                                    ->visibility('public')
+                                    ->acceptedFileTypes(['image/*', 'video/mp4'])
+                                    ->maxSize(20480),
+                                FileUpload::make('thumbnail')
+                                    ->label('Video Thumbnail')
+                                    ->disk('r2')
+                                    ->directory('products/gallery/thumbnails')
+                                    ->visibility('public')
+                                    ->image()
+                                    ->maxSize(4096),
                             ])
                             ->default([])
                             ->collapsible(),

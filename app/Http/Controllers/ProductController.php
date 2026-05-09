@@ -156,6 +156,21 @@ class ProductController extends Controller
 
     private function transformProduct(Product $product): array
     {
+        $gallery = collect($product->gallery ?? [])
+            ->map(function (array $item): array {
+                if (isset($item['url'])) {
+                    $item['url'] = $this->resolveMediaUrl($item['url']);
+                }
+
+                if (isset($item['thumbnail'])) {
+                    $item['thumbnail'] = $this->resolveMediaUrl($item['thumbnail']);
+                }
+
+                return $item;
+            })
+            ->values()
+            ->all();
+
         return [
             'id' => $product->id,
             'slug' => $product->slug,
@@ -168,8 +183,8 @@ class ProductController extends Controller
                 'total_reviews' => $product->total_reviews,
             ],
             'media' => [
-                'main_image' => $product->main_image,
-                'gallery' => $product->gallery ?? [],
+                'main_image' => $this->resolveMediaUrl($product->main_image),
+                'gallery' => $gallery,
             ],
             'variants' => [
                 'magnification' => $product->magnification ?? [],
@@ -182,5 +197,28 @@ class ProductController extends Controller
             'created_at' => $product->created_at,
             'updated_at' => $product->updated_at,
         ];
+    }
+
+    private function resolveMediaUrl(?string $value): ?string
+    {
+        if (! is_string($value) || trim($value) === '') {
+            return $value;
+        }
+
+        if (str_starts_with($value, 'http://') || str_starts_with($value, 'https://')) {
+            return $value;
+        }
+
+        $path = ltrim($value, '/');
+        $configuredUrl = rtrim((string) config('filesystems.disks.r2.url'), '/');
+
+        if ($configuredUrl !== '') {
+            return $configuredUrl.'/'.$path;
+        }
+
+        $endpoint = rtrim((string) config('filesystems.disks.r2.endpoint'), '/');
+        $bucket = (string) config('filesystems.disks.r2.bucket');
+
+        return $endpoint.'/'.$bucket.'/'.$path;
     }
 }
