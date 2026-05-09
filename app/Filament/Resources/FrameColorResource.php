@@ -9,6 +9,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section as ComponentsSection;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -17,13 +18,13 @@ class FrameColorResource extends Resource
 {
     protected static ?string $model = FrameColor::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-swatch';
+    protected static string $navigationIcon = 'heroicon-o-swatch';
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
-                Section::make('Frame Color')
+                ComponentsSection::make('Frame Color')
                     ->schema([
                         TextInput::make('code')->required()->maxLength(50)->unique(ignoreRecord: true),
                         TextInput::make('name')->required()->maxLength(100),

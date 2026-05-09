@@ -17,7 +17,7 @@ class MagnificationResource extends Resource
 {
     protected static ?string $model = Magnification::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-magnifying-glass';
+    protected static string $navigationIcon = 'heroicon-o-magnifying-glass';
 
     public static function form(Form $form): Form
     {

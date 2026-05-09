@@ -15,7 +15,7 @@ class TrustBadgeResource extends Resource
 {
     protected static ?string $model = TrustBadge::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-shield-check';
+    protected static string $navigationIcon = 'heroicon-o-shield-check';
 
     public static function form(Form $form): Form
     {
