@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -57,10 +58,16 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        if (! $token = Auth::guard('api')->attempt($credentials)) {
+        try {
+            if (! $token = Auth::guard('api')->attempt($credentials)) {
+                return response()->json([
+                    'message' => 'Invalid credentials.',
+                ], 401);
+            }
+        } catch (Exception) {
             return response()->json([
-                'message' => 'Invalid credentials.',
-            ], 401);
+                'message' => 'Unable to login right now. Please try again later.',
+            ], 500);
         }
 
         return response()->json([
