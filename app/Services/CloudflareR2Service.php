@@ -8,9 +8,6 @@ use Illuminate\Support\Str;
 
 class CloudflareR2Service
 {
-    /**
-     * Map dashboard upload section -> folder path in R2.
-     */
     private const SECTION_FOLDERS = [
         'product' => 'products',
         'testimonial' => 'testimonials',
@@ -25,26 +22,34 @@ class CloudflareR2Service
         $fileName = Str::uuid().'.'.$extension;
         $path = trim($directory, '/').'/'.$fileName;
 
-        Storage::disk('r2')->put($path, file_get_contents($file->getRealPath()), [
-            'visibility' => 'public',
-            'ContentType' => $file->getMimeType(),
-        ]);
+        Storage::disk('r2')->put($path, file_get_contents($file->getRealPath()), 'public');
 
         return [
             'path' => $path,
-            'url' => $this->resolvePublicUrl($path),
+            'url' => $this->url($path),
+            'name' => $fileName,
+            'original_name' => $file->getClientOriginalName(),
+            'mime_type' => $file->getMimeType(),
+            'size' => $file->getSize(),
         ];
     }
 
     public function directoryFromSection(string $section): string
     {
-        $normalized = Str::lower(trim($section));
-
-        return self::SECTION_FOLDERS[$normalized] ?? self::SECTION_FOLDERS['general'];
+        return self::SECTION_FOLDERS[$section] ?? self::SECTION_FOLDERS['general'];
     }
 
-    private function resolvePublicUrl(string $path): string
+    public function url(?string $path): ?string
     {
+        if (! is_string($path) || trim($path) === '') {
+            return $path;
+        }
+
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+
+        $path = ltrim($path, '/');
         $configuredUrl = rtrim((string) config('filesystems.disks.r2.url'), '/');
 
         if ($configuredUrl !== '') {
