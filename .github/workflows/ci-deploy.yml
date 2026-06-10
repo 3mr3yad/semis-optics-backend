@@ -13,6 +13,7 @@ jobs:
   test:
     name: Run PHP Unit Tests
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -22,6 +23,16 @@ jobs:
           php-version: "8.3"
           extensions: mbstring, bcmath, pcntl, intl, sqlite, pdo_sqlite, curl
           coverage: none
+
+      - name: Prepare Laravel directories
+        run: |
+          mkdir -p bootstrap/cache
+          mkdir -p storage/framework/cache/data
+          mkdir -p storage/framework/sessions
+          mkdir -p storage/framework/views
+          mkdir -p storage/logs
+
+          chmod -R 775 bootstrap/cache storage
 
       - name: Cache composer deps
         uses: actions/cache@v4
@@ -33,7 +44,7 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
-      - name: Prepare app key (testing)
+      - name: Prepare app key testing
         run: |
           cp .env.example .env
           php artisan key:generate
@@ -45,17 +56,18 @@ jobs:
     name: Deploy to Server
     needs: test
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Ensure SSH secrets exist (hard check)
+      - name: Ensure SSH secrets exist
         run: |
-          echo "SSH_KEY length:     $(echo "${{ secrets.SSH_KEY }}" | wc -c)"
-          echo "SSH_HOST present?   $([ -n "${{ secrets.SSH_HOST }}" ] && echo yes || echo no)"
-          echo "SSH_USER present?   $([ -n "${{ secrets.SSH_USER }}" ] && echo yes || echo no)"
-          echo "SSH_PORT present?   $([ -n "${{ secrets.SSH_PORT }}" ] && echo yes || echo no)"
-          echo "DEPLOY_PATH present?$([ -n "${{ secrets.DEPLOY_PATH }}" ] && echo yes || echo no)"
-          echo "ENV_PROD present?   $([ -n "${{ secrets.ENV_PROD }}" ] && echo yes || echo no)"
+          echo "SSH_KEY length:      $(echo "${{ secrets.SSH_KEY }}" | wc -c)"
+          echo "SSH_HOST present?    $([ -n "${{ secrets.SSH_HOST }}" ] && echo yes || echo no)"
+          echo "SSH_USER present?    $([ -n "${{ secrets.SSH_USER }}" ] && echo yes || echo no)"
+          echo "SSH_PORT present?    $([ -n "${{ secrets.SSH_PORT }}" ] && echo yes || echo no)"
+          echo "DEPLOY_PATH present? $([ -n "${{ secrets.DEPLOY_PATH }}" ] && echo yes || echo no)"
+          echo "ENV_PROD present?    $([ -n "${{ secrets.ENV_PROD }}" ] && echo yes || echo no)"
 
       - name: Add SSH key
         uses: webfactory/ssh-agent@v0.9.0
@@ -67,7 +79,6 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-      # مزامنة الكود (من غير vendor/storage/.env…)
       - name: Rsync to server
         run: |
           rsync -az --delete \
@@ -81,8 +92,7 @@ jobs:
             -e "ssh -p ${{ secrets.SSH_PORT }}" \
             ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}
 
-      # كتابة .env من سيكريت (multiline)
-      - name: Write .env on server (from secret)
+      - name: Write .env on server from secret
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -91,12 +101,11 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script: |
             set -e
+
             cd "${{ secrets.DEPLOY_PATH }}"
-            if [ ! -f .env ]; then
-              echo "Creating .env from secrets"
-            else
-              echo "Updating existing .env from secrets"
-            fi
+
+            echo "==> Write production .env"
+
             cat > .env <<'EOF_ENV'
             ${{ secrets.ENV_PROD }}
             EOF_ENV
@@ -110,51 +119,59 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script: |
             set -euo pipefail
+
             cd "${{ secrets.DEPLOY_PATH }}"
+
+            echo "==> Clear old Laravel bootstrap cache"
+            rm -f bootstrap/cache/*.php || true
 
             echo "==> Prepare Laravel writable directories BEFORE composer scripts"
             mkdir -p \
               storage/framework/cache/data \
               storage/framework/sessions \
               storage/framework/views \
+              storage/framework/cache \
               storage/logs \
+              storage/app/public \
+              public \
               bootstrap/cache
 
-            # symlink public/storage (اختياري)
-            php -r "file_exists('public/storage') || symlink('../storage/app/public','public/storage');" || true
-
-            # صلاحيات
+            echo "==> Fix permissions"
             sudo chown -R www-data:www-data storage bootstrap/cache || true
             sudo find storage -type d -exec chmod 775 {} \; || true
             sudo find storage -type f -exec chmod 664 {} \; || true
             sudo chmod -R 775 bootstrap/cache || true
 
-            # صيانة
+            echo "==> Put app in maintenance mode"
             if [ -f artisan ]; then
               php artisan down --refresh=60 --render="errors::503" || true
             fi
 
-            echo "==> Install composer deps (NO scripts first)"
+            echo "==> Install composer deps without scripts"
             composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress --no-scripts
 
-            echo "==> Run package discovery after dirs are ready"
+            echo "==> Run Laravel package discovery"
             php artisan package:discover --ansi
 
-            echo "==> Clear & optimize"
+            echo "==> Clear Laravel caches"
             php artisan optimize:clear || true
 
-            echo "==> Migrate"
+            echo "==> Run migrations"
             php artisan migrate --force
 
-            # (اختياري) Filament Shield
+            echo "==> Create storage link"
+            php artisan storage:link || true
+
+            echo "==> Run Filament Shield commands if enabled"
             if [ "${{ secrets.RUN_SHIELD || '0' }}" = "1" ]; then
               php artisan shield:generate --all || true
+
               if [ -n "${{ secrets.SUPER_ADMIN_ID }}" ]; then
                 php artisan shield:super-admin --user="${{ secrets.SUPER_ADMIN_ID }}" || true
               fi
             fi
 
-            echo "==> Cache for production"
+            echo "==> Cache Laravel for production"
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
@@ -163,11 +180,11 @@ jobs:
             echo "==> Restart queue"
             php artisan queue:restart || true
 
-            echo "==> Up"
+            echo "==> Bring app back up"
             php artisan up || true
 
             echo "==> Reload PHP-FPM"
-            (sudo systemctl reload php8.3-fpm || sudo systemctl reload php8.2-fpm || sudo systemctl reload php8.1-fpm || true)
+            sudo systemctl reload php8.3-fpm || sudo systemctl reload php8.2-fpm || sudo systemctl reload php8.1-fpm || true
 
       - name: Health check
         run: |
