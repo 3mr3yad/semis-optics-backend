@@ -126,24 +126,27 @@ jobs:
 
             cd "${{ secrets.DEPLOY_PATH }}"
 
-            echo "==> Clear old Laravel bootstrap cache"
+            echo "==> Make sure app comes back up if deploy fails"
+            trap 'php artisan up || true' EXIT
+
+            echo "==> Clear old Laravel bootstrap cache BEFORE anything"
             rm -f bootstrap/cache/*.php || true
 
-            echo "==> Prepare Laravel writable directories BEFORE composer scripts"
+            echo "==> Prepare Laravel writable directories BEFORE composer"
             mkdir -p storage/framework/cache/data
             mkdir -p storage/framework/sessions
             mkdir -p storage/framework/views
             mkdir -p storage/framework/cache
             mkdir -p storage/logs
+            mkdir -p storage/app/public
             mkdir -p public
             mkdir -p bootstrap/cache
 
             if [ -e storage/app/public ] && [ ! -d storage/app/public ]; then
               echo "storage/app/public exists but is not a directory, removing it"
               rm -f storage/app/public
+              mkdir -p storage/app/public
             fi
-
-            mkdir -p storage/app/public
 
             echo "==> Fix permissions"
             sudo chown -R www-data:www-data storage bootstrap/cache || true
@@ -152,12 +155,16 @@ jobs:
             sudo chmod -R 775 bootstrap/cache || true
 
             echo "==> Put app in maintenance mode"
-            if [ -f artisan ]; then
-              php artisan down --refresh=60 --render="errors::503" || true
-            fi
+            php artisan down --refresh=60 || true
 
-            echo "==> Install composer deps without scripts"
+            echo "==> Install composer deps without dev packages and without scripts"
             composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-progress --no-scripts
+
+            echo "==> Clear Laravel bootstrap cache AFTER composer"
+            rm -f bootstrap/cache/*.php || true
+
+            echo "==> Rebuild composer autoload"
+            composer dump-autoload --optimize --no-dev
 
             echo "==> Run Laravel package discovery"
             php artisan package:discover --ansi
@@ -189,7 +196,6 @@ jobs:
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
-            php artisan optimize
 
             echo "==> Restart queue"
             php artisan queue:restart || true
@@ -199,6 +205,8 @@ jobs:
 
             echo "==> Reload PHP-FPM"
             sudo systemctl reload php8.3-fpm || sudo systemctl reload php8.2-fpm || sudo systemctl reload php8.1-fpm || true
+
+            trap - EXIT
 
       - name: Health check
         run: |
