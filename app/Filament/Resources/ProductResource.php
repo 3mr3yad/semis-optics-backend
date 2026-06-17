@@ -21,6 +21,16 @@ class ProductResource extends Resource
 
     protected static UnitEnum|string|null $navigationGroup = 'Catalog';
 
+    private static function uploadDisk(): string
+    {
+        return filled(config('filesystems.disks.r2.key'))
+            && filled(config('filesystems.disks.r2.secret'))
+            && filled(config('filesystems.disks.r2.bucket'))
+            && filled(config('filesystems.disks.r2.endpoint'))
+                ? 'r2'
+                : 'public';
+    }
+
     public static function form(Schema $form): Schema
     {
         return $form
@@ -49,9 +59,10 @@ class ProductResource extends Resource
 
                 Forms\Components\FileUpload::make('image')
                     ->label('Image')
-                    ->disk('r2')
+                    ->disk(static::uploadDisk())
                     ->directory('products')
                     ->image()
+                    ->visibility('public')
                     ->maxSize(5120)
                     ->nullable(),
 
