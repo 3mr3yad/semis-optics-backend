@@ -25,6 +25,30 @@ class ProductController extends Controller
             $data['category']['image'] = $this->r2Service->url($data['category']['image'] ?? null);
         }
 
+        if (isset($data['colors']) && is_array($data['colors'])) {
+            $data['colors'] = array_map(function ($color) {
+                $image = $color['pivot']['image'] ?? null;
+
+                if ($image && !str_starts_with($image, 'http://') && !str_starts_with($image, 'https://')) {
+                    $image = $this->r2Service->url($image);
+                }
+
+                $color['image'] = $image;
+
+                return $color;
+            }, $data['colors']);
+        }
+
+        if (isset($data['models']) && is_array($data['models'])) {
+            $data['models'] = array_map(function ($model) {
+                if (isset($model['image']) && $model['image'] && !str_starts_with($model['image'], 'http://') && !str_starts_with($model['image'], 'https://')) {
+                    $model['image'] = $this->r2Service->url($model['image']);
+                }
+
+                return $model;
+            }, $data['models']);
+        }
+
         return $data;
     }
 
@@ -44,7 +68,7 @@ class ProductController extends Controller
             $query->where('title', 'like', '%'.$request->search.'%');
         }
 
-        $query->with(['category', 'colors']);
+        $query->with(['category', 'colors', 'models']);
 
         $query->orderBy('created_at', 'desc');
 
@@ -63,7 +87,7 @@ class ProductController extends Controller
 
     public function show(string $id): JsonResponse
     {
-        $product = Product::with(['category', 'colors'])->findOrFail($id);
+        $product = Product::with(['category', 'colors', 'models'])->findOrFail($id);
 
         return response()->json($this->transformProduct($product));
     }
@@ -73,8 +97,6 @@ class ProductController extends Controller
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'price' => ['required', 'numeric', 'min:0'],
-            'price_after_discount' => ['nullable', 'numeric', 'min:0'],
             'image' => ['nullable', 'file', 'image', 'max:5120'],
             'category_id' => ['nullable', 'exists:categories,id'],
             'is_active' => ['boolean'],
@@ -93,7 +115,7 @@ class ProductController extends Controller
             $product->colors()->sync($validated['colors']);
         }
 
-        return response()->json($this->transformProduct($product->load('category', 'colors')), 201);
+        return response()->json($this->transformProduct($product->load('category', 'colors', 'models')), 201);
     }
 
     public function update(Request $request, string $id): JsonResponse
@@ -103,8 +125,6 @@ class ProductController extends Controller
         $validated = $request->validate([
             'title' => ['sometimes', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'price' => ['sometimes', 'numeric', 'min:0'],
-            'price_after_discount' => ['nullable', 'numeric', 'min:0'],
             'image' => ['nullable', 'file', 'image', 'max:5120'],
             'category_id' => ['nullable', 'exists:categories,id'],
             'is_active' => ['boolean'],
@@ -123,7 +143,7 @@ class ProductController extends Controller
             $product->colors()->sync($validated['colors']);
         }
 
-        return response()->json($this->transformProduct($product->load('category', 'colors')));
+        return response()->json($this->transformProduct($product->load('category', 'colors', 'models')));
     }
 
     public function destroy(string $id): JsonResponse

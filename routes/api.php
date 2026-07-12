@@ -6,6 +6,7 @@ use App\Http\Controllers\ColorController;
 use App\Http\Controllers\DispositionController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProductModelController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('ping', fn () => response()->json(['message' => 'pong']));
@@ -50,6 +51,17 @@ Route::prefix('products')->group(function () {
         Route::post('/', [ProductController::class, 'store']);
         Route::put('{id}', [ProductController::class, 'update']);
         Route::delete('{id}', [ProductController::class, 'destroy']);
+    });
+});
+
+Route::prefix('product-models')->group(function () {
+    Route::get('/', [ProductModelController::class, 'index']);
+    Route::get('{id}', [ProductModelController::class, 'show']);
+
+    Route::middleware('auth:api')->group(function () {
+        Route::post('/', [ProductModelController::class, 'store']);
+        Route::put('{id}', [ProductModelController::class, 'update']);
+        Route::delete('{id}', [ProductModelController::class, 'destroy']);
     });
 });
 

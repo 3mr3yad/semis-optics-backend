@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Product extends Model
 {
@@ -14,16 +15,12 @@ class Product extends Model
     protected $fillable = [
         'title',
         'description',
-        'price',
-        'price_after_discount',
         'image',
         'category_id',
         'is_active',
     ];
 
     protected $casts = [
-        'price' => 'decimal:2',
-        'price_after_discount' => 'decimal:2',
         'is_active' => 'boolean',
     ];
 
@@ -34,6 +31,12 @@ class Product extends Model
 
     public function colors(): BelongsToMany
     {
-        return $this->belongsToMany(Color::class, 'product_color');
+        return $this->belongsToMany(Color::class, 'product_color')
+            ->withPivot('image');
+    }
+
+    public function models(): HasMany
+    {
+        return $this->hasMany(ProductModel::class);
     }
 }

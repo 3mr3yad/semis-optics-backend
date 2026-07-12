@@ -31,31 +31,31 @@ class ProductResource extends Resource
                 : 'public';
     }
 
+    private static function normalizeModelData(array $data): array
+    {
+        if (isset($data['image']) && is_array($data['image'])) {
+            $data['image'] = reset($data['image']) ?: null;
+        }
+
+        $data['attributes'] = $data['attributes'] ?? [];
+        $data['is_active'] = $data['is_active'] ?? true;
+
+        return $data;
+    }
+
     public static function form(Schema $form): Schema
     {
         return $form
             ->schema([
                 Forms\Components\TextInput::make('title')
                     ->required()
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->columnSpanFull(),
 
                 Forms\Components\Textarea::make('description')
                     ->rows(3)
-                    ->nullable(),
-
-                Forms\Components\TextInput::make('price')
-                    ->label('Price')
-                    ->required()
-                    ->numeric()
-                    ->prefix('$')
-                    ->step(0.01),
-
-                Forms\Components\TextInput::make('price_after_discount')
-                    ->label('Price After Discount')
-                    ->numeric()
-                    ->prefix('$')
-                    ->step(0.01)
-                    ->nullable(),
+                    ->nullable()
+                    ->columnSpanFull(),
 
                 Forms\Components\FileUpload::make('image')
                     ->label('Image')
@@ -64,22 +64,156 @@ class ProductResource extends Resource
                     ->image()
                     ->visibility('public')
                     ->maxSize(5120)
-                    ->nullable(),
+                    ->nullable()
+                    ->columnSpanFull(),
 
                 Forms\Components\Select::make('category_id')
                     ->label('Category')
                     ->relationship('category', 'name')
                     ->searchable()
                     ->preload()
-                    ->nullable(),
+                    ->nullable()
+                    ->columnSpanFull(),
+
+                Forms\Components\Repeater::make('colorImages')
+                    ->label('Colors')
+                    ->columnSpanFull()
+                    ->columns(2)
+                    ->collapsible()
+                    ->addActionLabel('Add Color')
+                    ->itemLabel(fn (array $state): ?string => \App\Models\Color::find($state['color_id'] ?? null)?->name)
+                    ->schema([
+                        Forms\Components\Select::make('color_id')
+                            ->label('Color')
+                            ->options(fn () => \App\Models\Color::query()->pluck('name', 'id'))
+                            ->searchable()
+                            ->required(),
+
+                        Forms\Components\FileUpload::make('image')
+                            ->label('Image')
+                            ->disk(static::uploadDisk())
+                            ->directory('product-colors')
+                            ->image()
+                            ->visibility('public')
+                            ->maxSize(5120)
+                            ->nullable(),
+                    ]),
+
+                Forms\Components\Repeater::make('models')
+                    ->relationship('models')
+                    ->label('Models')
+                    ->columnSpanFull()
+                    ->columns(2)
+                    ->defaultItems(1)
+                    ->collapsible()
+                    ->addActionLabel('Add Model')
+                    ->itemLabel(fn (array $state): ?string => $state['name'] ?? 'New model')
+                    ->addAction(function (\Filament\Actions\Action $action): \Filament\Actions\Action {
+                        return $action->action(function (Forms\Components\Repeater $component): void {
+                            $items = $component->getRawState();
+
+                            $lastAttributes = collect($items)->last()['attributes'] ?? [];
+
+                            $newUuid = $component->generateUuid();
+
+                            $newItem = [
+                                'attributes' => is_array($lastAttributes)
+                                    ? array_fill_keys(array_keys($lastAttributes), '')
+                                    : [],
+                            ];
+
+                            if ($newUuid) {
+                                $items[$newUuid] = $newItem;
+                            } else {
+                                $items[] = $newItem;
+                            }
+
+                            $component->rawState($items);
+
+                            $component->getChildSchema($newUuid ?? array_key_last($items))->fill();
+
+                            $component->collapsed(false, shouldMakeComponentCollapsible: false);
+
+                            $component->callAfterStateUpdated();
+
+                            $component->shouldPartiallyRenderAfterActionsCalled() ? $component->partiallyRender() : null;
+                        });
+                    })
+                    ->extraItemActions([
+                        fn (Forms\Components\Repeater $component): \Filament\Actions\Action => \Filament\Actions\Action::make('copyAttributeNames')
+                            ->label('Copy attribute names to other models')
+                            ->icon('heroicon-o-document-duplicate')
+                            ->action(function (array $arguments) use ($component): void {
+                                $items = $component->getRawState();
+
+                                $sourceAttributes = $items[$arguments['item']]['attributes'] ?? [];
+
+                                if (empty($sourceAttributes)) {
+                                    return;
+                                }
+
+                                $keys = is_array($sourceAttributes)
+                                    ? array_fill_keys(array_keys($sourceAttributes), '')
+                                    : [];
+
+                                foreach ($items as $uuid => $item) {
+                                    if ($uuid === $arguments['item']) {
+                                        continue;
+                                    }
+
+                                    $items[$uuid]['attributes'] = $keys + ($item['attributes'] ?? []);
+                                }
+
+                                $component->rawState($items);
+                                $component->callAfterStateUpdated();
+                                $component->shouldPartiallyRenderAfterActionsCalled() ? $component->partiallyRender() : null;
+                            }),
+                    ])
+                    ->schema([
+                        Forms\Components\TextInput::make('name')
+                            ->required()
+                            ->maxLength(255)
+                            ->columnSpanFull(),
+
+                        Forms\Components\TextInput::make('price')
+                            ->label('Price')
+                            ->numeric()
+                            ->prefix('$')
+                            ->step(0.01)
+                            ->nullable(),
+
+                        Forms\Components\TextInput::make('price_after_discount')
+                            ->label('Price After Discount')
+                            ->numeric()
+                            ->prefix('$')
+                            ->step(0.01)
+                            ->nullable(),
+
+                        Forms\Components\FileUpload::make('image')
+                            ->label('Image')
+                            ->disk(static::uploadDisk())
+                            ->directory('product-models')
+                            ->image()
+                            ->visibility('public')
+                            ->maxSize(5120)
+                            ->nullable()
+                            ->columnSpanFull(),
+
+                        Forms\Components\Toggle::make('is_active')
+                            ->default(true),
+
+                        Forms\Components\KeyValue::make('attributes')
+                            ->keyLabel('Attribute Name')
+                            ->valueLabel('Attribute Value')
+                            ->addActionLabel('Add Attribute')
+                            ->reorderable()
+                            ->columnSpanFull(),
+                    ])
+                    ->mutateRelationshipDataBeforeCreateUsing(fn (array $data): array => static::normalizeModelData($data))
+                    ->mutateRelationshipDataBeforeSaveUsing(fn (array $data): array => static::normalizeModelData($data)),
 
                 Forms\Components\Toggle::make('is_active')
                     ->default(true),
-
-                Forms\Components\CheckboxList::make('colors')
-                    ->relationship('colors', 'name')
-                    ->searchable()
-                    ->bulkToggleable(),
             ])
             ->columns(2);
     }
@@ -96,16 +230,6 @@ class ProductResource extends Resource
                 Tables\Columns\TextColumn::make('category.name')
                     ->label('Category')
                     ->searchable()
-                    ->sortable()
-                    ->toggleable(),
-
-                Tables\Columns\TextColumn::make('price')
-                    ->money()
-                    ->sortable(),
-
-                Tables\Columns\TextColumn::make('price_after_discount')
-                    ->label('Discount Price')
-                    ->money()
                     ->sortable()
                     ->toggleable(),
 
