@@ -49,6 +49,16 @@ class ProductController extends Controller
             }, $data['models']);
         }
 
+        if (isset($data['images']) && is_array($data['images'])) {
+            $data['images'] = array_map(function ($image) {
+                if (isset($image['image']) && $image['image'] && !str_starts_with($image['image'], 'http://') && !str_starts_with($image['image'], 'https://')) {
+                    $image['image'] = $this->r2Service->url($image['image']);
+                }
+
+                return $image;
+            }, $data['images']);
+        }
+
         return $data;
     }
 
@@ -68,7 +78,7 @@ class ProductController extends Controller
             $query->where('title', 'like', '%'.$request->search.'%');
         }
 
-        $query->with(['category', 'colors', 'models']);
+        $query->with(['category', 'colors', 'models', 'images']);
 
         $query->orderBy('created_at', 'desc');
 
@@ -87,7 +97,7 @@ class ProductController extends Controller
 
     public function show(string $id): JsonResponse
     {
-        $product = Product::with(['category', 'colors', 'models'])->findOrFail($id);
+        $product = Product::with(['category', 'colors', 'models', 'images'])->findOrFail($id);
 
         return response()->json($this->transformProduct($product));
     }
@@ -115,7 +125,7 @@ class ProductController extends Controller
             $product->colors()->sync($validated['colors']);
         }
 
-        return response()->json($this->transformProduct($product->load('category', 'colors', 'models')), 201);
+        return response()->json($this->transformProduct($product->load('category', 'colors', 'models', 'images')), 201);
     }
 
     public function update(Request $request, string $id): JsonResponse
@@ -143,7 +153,7 @@ class ProductController extends Controller
             $product->colors()->sync($validated['colors']);
         }
 
-        return response()->json($this->transformProduct($product->load('category', 'colors', 'models')));
+        return response()->json($this->transformProduct($product->load('category', 'colors', 'models', 'images')));
     }
 
     public function destroy(string $id): JsonResponse

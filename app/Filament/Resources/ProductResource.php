@@ -99,6 +99,26 @@ class ProductResource extends Resource
                             ->nullable(),
                     ]),
 
+                Forms\Components\Repeater::make('images')
+                    ->relationship('images')
+                    ->label('Gallery Images')
+                    ->columnSpanFull()
+                    ->collapsible()
+                    ->defaultItems(0)
+                    ->addActionLabel('Add Image')
+                    ->reorderable()
+                    ->orderColumn('sort_order')
+                    ->schema([
+                        Forms\Components\FileUpload::make('image')
+                            ->label('Image')
+                            ->disk(static::uploadDisk())
+                            ->directory('product-images')
+                            ->image()
+                            ->visibility('public')
+                            ->maxSize(5120)
+                            ->required(),
+                    ]),
+
                 Forms\Components\Repeater::make('models')
                     ->relationship('models')
                     ->label('Models')

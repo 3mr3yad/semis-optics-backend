@@ -55,7 +55,8 @@ Returns a single **Product object** directly (not wrapped in `data`).
   "updated_at": "2026-07-12T20:11:49.000000Z",
   "category": { /* Category object, see below */ },
   "colors": [ /* array of Color objects, see below */ ],
-  "models": [ /* array of Model objects, see below */ ]
+  "models": [ /* array of Model objects, see below */ ],
+  "images": [ /* array of Image objects, see below */ ]
 }
 ```
 
@@ -72,6 +73,7 @@ Returns a single **Product object** directly (not wrapped in `data`).
 | `category`    | object\|null  | Present when the product has a category, always eager-loaded          |
 | `colors`      | array         | Always present (empty array if none attached)                          |
 | `models`      | array         | Always present (empty array if none created)                           |
+| `images`      | array         | Always present (empty array if none uploaded); ordered by `sort_order` |
 
 > Note: `price`, `price_after_discount`, and `attributes` columns still exist on the `products` table for legacy reasons but are no longer used — pricing and attributes now live per **model** (see below). Don't rely on them in new integrations.
 
@@ -156,11 +158,33 @@ A "model" represents a variant of the product (e.g. a specific magnification/siz
 
 A product with no models returns `"models": []`.
 
+## Image object (nested, per product — gallery)
+
+The product's main `image` field (top-level) is a single cover/thumbnail image. `images` is a separate gallery — additional photos shown e.g. in a product detail carousel.
+
+```json
+{
+  "id": 1,
+  "product_id": 5,
+  "image": "https://pub-xxxxxxxx.r2.dev/product-images/xxxx.jpg",
+  "sort_order": 0,
+  "created_at": "2026-07-13T10:34:46.000000Z",
+  "updated_at": "2026-07-13T10:34:46.000000Z"
+}
+```
+
+| Field        | Type   | Notes                                                        |
+|--------------|--------|---------------------------------------------------------------|
+| `image`      | string | Full resolved URL                                              |
+| `sort_order` | int    | Display order (ascending); managed via drag-reorder in the admin panel |
+
+A product with no gallery images returns `"images": []`. There is currently no public write endpoint for gallery images — they're managed inline on the product form in the admin panel only.
+
 ## Notes for frontend integration
 
 - All `image` fields returned by this API are already resolved to absolute, publicly-accessible URLs — never build the R2 URL yourself from a raw path.
-- `colors[].image` and `models[].image` can be `null` if no image was uploaded for that color/model.
-- `models` can be empty — always guard against `models.length === 0` when a product has no variants yet.
+- `colors[].image`, `models[].image`, and the top-level `image` can be `null` if no image was uploaded for that color/model/product.
+- `models` and `images` can be empty — always guard against `models.length === 0` / `images.length === 0` when a product has no variants or gallery photos yet.
 
 ## Writing products (`POST` / `PUT`)
 
