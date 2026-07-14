@@ -270,19 +270,32 @@ class ProductResource extends Resource
                 Tables\Columns\TextColumn::make('colors')
                     ->label('Colors')
                     ->formatStateUsing(function ($record) {
-                        $colors = $record->colors;
+                        $colors = $record->colors->unique('hex_code')->values();
+
                         if ($colors->isEmpty()) {
                             return '-';
                         }
-                        return $colors
-                            ->unique('id')
-                            ->map(function ($color) {
-                                $hex = $color->hex_code ?? '#000000';
-                                return "<div style='width: 20px; height: 20px; background-color: {$hex}; border-radius: 50%; display: inline-block; margin-right: 4px; border: 1px solid #ccc;' title='{$hex}'></div>";
-                            })
-                            ->implode('');
+
+                        $maxVisible = 5;
+                        $visible = $colors->take($maxVisible);
+                        $remaining = $colors->count() - $visible->count();
+
+                        $swatches = $visible->map(function ($color) {
+                            $hex = e($color->hex_code ?? '#000000');
+                            $name = e($color->name ?? $hex);
+
+                            return "<span style='width: 18px; height: 18px; background-color: {$hex}; border-radius: 50%; display: inline-block; border: 1px solid rgba(255,255,255,0.2); flex-shrink: 0;' title='{$name}'></span>";
+                        })->implode('');
+
+                        $badge = $remaining > 0
+                            ? "<span style='font-size: 11px; color: var(--gray-400, #9ca3af); flex-shrink: 0; margin-left: 2px;' title='".e($colors->slice($maxVisible)->pluck('name')->implode(', '))."'>+{$remaining}</span>"
+                            : '';
+
+                        return "<div style='display: flex; align-items: center; gap: 4px;'>{$swatches}{$badge}</div>";
                     })
                     ->html()
+                    ->wrap(false)
+                    ->tooltip(fn ($record): string => $record->colors->unique('hex_code')->pluck('name')->implode(', ') ?: 'No colors')
                     ->toggleable(),
 
                 Tables\Columns\IconColumn::make('is_active')
