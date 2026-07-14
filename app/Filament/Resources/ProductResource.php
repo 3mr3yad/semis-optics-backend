@@ -269,7 +269,7 @@ class ProductResource extends Resource
 
                 Tables\Columns\TextColumn::make('colors')
                     ->label('Colors')
-                    ->formatStateUsing(function ($record) {
+                    ->getStateUsing(function ($record) {
                         $colors = $record->colors->unique('hex_code')->values();
 
                         if ($colors->isEmpty()) {
