@@ -76,7 +76,9 @@ class OrderResource extends Resource
                         ->pluck('name', 'id'))
                     ->searchable()
                     ->preload()
-                    ->nullable(),
+                    ->nullable()
+                    ->disabled(fn (?Order $record): bool => $record !== null)
+                    ->dehydrated(fn (?Order $record): bool => $record === null),
 
                 Forms\Components\Select::make('status')
                     ->options([
