@@ -69,6 +69,15 @@ class OrderResource extends Resource
                     ->preload()
                     ->nullable(),
 
+                Forms\Components\Select::make('product_model_id')
+                    ->label('Model')
+                    ->options(fn (Forms\Get $get) => \App\Models\ProductModel::query()
+                        ->where('product_id', $get('product_id'))
+                        ->pluck('name', 'id'))
+                    ->searchable()
+                    ->preload()
+                    ->nullable(),
+
                 Forms\Components\Select::make('status')
                     ->options([
                         'pending' => 'Pending',
@@ -96,7 +105,7 @@ class OrderResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn ($query) => $query->with(['product', 'color', 'disposition']))
+            ->modifyQueryUsing(fn ($query) => $query->with(['product', 'color', 'model', 'disposition']))
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->searchable()
@@ -118,6 +127,12 @@ class OrderResource extends Resource
 
                 Tables\Columns\TextColumn::make('color.name')
                     ->label('Color')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
+
+                Tables\Columns\TextColumn::make('model.name')
+                    ->label('Model')
                     ->searchable()
                     ->sortable()
                     ->toggleable(),

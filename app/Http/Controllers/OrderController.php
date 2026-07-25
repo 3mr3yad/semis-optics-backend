@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\Rule;
 
 class OrderController extends Controller
 {
@@ -14,6 +15,14 @@ class OrderController extends Controller
 
         if (isset($data['product']) && is_array($data['product'])) {
             $data['product']['image'] = app(\App\Services\CloudflareR2Service::class)->url($data['product']['image'] ?? null);
+        }
+
+        if (isset($data['model']) && is_array($data['model'])) {
+            $image = $data['model']['image'] ?? null;
+
+            if ($image && !str_starts_with($image, 'http://') && !str_starts_with($image, 'https://')) {
+                $data['model']['image'] = app(\App\Services\CloudflareR2Service::class)->url($image);
+            }
         }
 
         return $data;
@@ -41,7 +50,7 @@ class OrderController extends Controller
                   ->orWhere('phone', 'like', '%'.$request->search.'%');
         }
 
-        $query->with(['product', 'color', 'disposition']);
+        $query->with(['product', 'color', 'model', 'disposition']);
 
         $query->orderBy('created_at', 'desc');
 
@@ -60,7 +69,7 @@ class OrderController extends Controller
 
     public function show(string $id): JsonResponse
     {
-        $order = Order::with(['product', 'color', 'disposition'])->findOrFail($id);
+        $order = Order::with(['product', 'color', 'model', 'disposition'])->findOrFail($id);
 
         return response()->json($this->transformOrder($order));
     }
@@ -76,16 +85,23 @@ class OrderController extends Controller
             'gender' => ['nullable', 'in:male,female,other'],
             'product_id' => ['required', 'exists:products,id'],
             'color_id' => ['nullable', 'exists:colors,id'],
+            'model' => [
+                'nullable',
+                'integer',
+                Rule::exists('product_models', 'id')->where('product_id', $request->input('product_id')),
+            ],
             'disposition_id' => ['nullable', 'exists:dispositions,id'],
             'status' => ['in:pending,processing,completed,cancelled'],
             'note' => ['nullable', 'string'],
         ]);
 
         $validated['status'] = $validated['status'] ?? 'pending';
+        $validated['product_model_id'] = $validated['model'] ?? null;
+        unset($validated['model']);
 
         $order = Order::create($validated);
 
-        return response()->json($this->transformOrder($order->load('product', 'color', 'disposition')), 201);
+        return response()->json($this->transformOrder($order->load('product', 'color', 'model', 'disposition')), 201);
     }
 
     public function update(Request $request, string $id): JsonResponse
@@ -101,14 +117,24 @@ class OrderController extends Controller
             'gender' => ['nullable', 'in:male,female,other'],
             'product_id' => ['sometimes', 'exists:products,id'],
             'color_id' => ['nullable', 'exists:colors,id'],
+            'model' => [
+                'nullable',
+                'integer',
+                Rule::exists('product_models', 'id')->where('product_id', $request->input('product_id', $order->product_id)),
+            ],
             'disposition_id' => ['nullable', 'exists:dispositions,id'],
             'status' => ['in:pending,processing,completed,cancelled'],
             'note' => ['nullable', 'string'],
         ]);
 
+        if (array_key_exists('model', $validated)) {
+            $validated['product_model_id'] = $validated['model'];
+            unset($validated['model']);
+        }
+
         $order->update($validated);
 
-        return response()->json($this->transformOrder($order->load('product', 'color', 'disposition')));
+        return response()->json($this->transformOrder($order->load('product', 'color', 'model', 'disposition')));
     }
 
     public function destroy(string $id): JsonResponse

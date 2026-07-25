@@ -19,6 +19,7 @@ class Order extends Model
         'gender',
         'product_id',
         'color_id',
+        'product_model_id',
         'disposition_id',
         'status',
         'note',
@@ -36,6 +37,11 @@ class Order extends Model
     public function color(): BelongsTo
     {
         return $this->belongsTo(Color::class);
+    }
+
+    public function model(): BelongsTo
+    {
+        return $this->belongsTo(ProductModel::class, 'product_model_id');
     }
 
     public function disposition(): BelongsTo
