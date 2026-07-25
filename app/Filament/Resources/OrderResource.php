@@ -8,6 +8,7 @@ use BackedEnum;
 use Filament\Actions;
 use Filament\Forms;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -71,7 +72,7 @@ class OrderResource extends Resource
 
                 Forms\Components\Select::make('product_model_id')
                     ->label('Model')
-                    ->options(fn (Forms\Get $get) => \App\Models\ProductModel::query()
+                    ->options(fn (Get $get) => \App\Models\ProductModel::query()
                         ->where('product_id', $get('product_id'))
                         ->pluck('name', 'id'))
                     ->searchable()
